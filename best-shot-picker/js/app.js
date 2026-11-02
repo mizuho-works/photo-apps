@@ -407,7 +407,68 @@ function renderFinish() {
     })
     .join('');
   updateFinishProgress();
+  renderAlbum();
 }
+
+// ---------- 「削除候補」アルバム（iPhone のショートカット経由） ----------
+// Web から写真ライブラリは触れないので、削除候補の撮影時刻（秒単位の範囲）を
+// ショートカット「削除候補に追加」に渡し、そちらで写真を探してアルバムに入れてもらう。
+
+const SHORTCUT_NAME = '削除候補に追加';
+const secOf = (ms) => Math.floor(ms / 1000);
+function fmtStamp(sec) {
+  const d = new Date(sec * 1000);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function albumPlan() {
+  const del = state.items.filter((i) => i.decision === 'delete' && !i.done);
+  const timed = del.filter((i) => i.time != null);
+  const secs = [...new Set(timed.map((i) => secOf(i.time)))].sort((a, b) => a - b);
+  // 続いている秒はひとつの範囲にまとめる（ショートカットの検索回数を減らす）
+  const ranges = [];
+  for (const s of secs) {
+    const last = ranges[ranges.length - 1];
+    if (last && s === last[1]) last[1] = s + 1;
+    else ranges.push([s, s + 1]);
+  }
+  const secSet = new Set(secs);
+  const mixed = state.items.filter((i) => i.decision !== 'delete' && i.time != null && secSet.has(secOf(i.time)));
+  return { del, timed, ranges, mixed, untimed: del.length - timed.length };
+}
+
+function renderAlbum() {
+  const p = albumPlan();
+  const btn = $('#btn-album');
+  btn.disabled = !p.timed.length;
+  btn.textContent = p.timed.length ? `「削除候補」アルバムに入れる（${p.timed.length}件）` : 'アルバムに入れる写真はありません';
+  const notes = [];
+  if (p.untimed) notes.push(`撮影日時がわからない ${p.untimed} 件は入れられません。下の一覧を見て手で消してください。`);
+  notes.push('初めてのときは「ショートカットを開きますか？」と聞かれるので「開く」を選んでください。');
+  $('#album-note').textContent = notes.join(' ');
+  $('#album-mix').hidden = !p.mixed.length;
+  $('#album-mix-strip').innerHTML = p.mixed
+    .map((i) => `<div class="mini keep mix">${i.thumbUrl ? `<img src="${i.thumbUrl}" loading="lazy" alt="">` : ''}<span class="t">${fmtClock(i.time)}</span></div>`)
+    .join('');
+}
+
+$('#btn-album').onclick = () => {
+  const p = albumPlan();
+  if (!p.ranges.length) return;
+  const text = p.ranges.map(([a, b]) => `${fmtStamp(a)},${fmtStamp(b)}`).join('\n');
+  location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_NAME)}&input=text&text=${encodeURIComponent(text)}`;
+  $('.album-how').open = true;
+};
+
+$('#btn-album-done').onclick = () => {
+  const p = albumPlan();
+  if (!p.timed.length) return;
+  if (!confirm(`アルバムに入れた ${p.timed.length} 件を「削除した」にしますか？`)) return;
+  p.timed.forEach((i) => (i.done = true));
+  saveSession();
+  renderFinish();
+  toast('削除済みにしました');
+};
 
 function updateFinishProgress() {
   const del = state.items.filter((i) => i.decision === 'delete');
