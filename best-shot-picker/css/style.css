@@ -184,10 +184,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .album-btn { width: 100%; min-height: 52px; }
 .album-btn:disabled { opacity: .45; }
 #album-mix { display: grid; gap: 6px; }
-.album-how summary { font-size: 14px; font-weight: 700; cursor: pointer; }
-.album-how ol { padding-left: 22px; margin: 8px 0; }
-.album-how li { margin: 3px 0; }
-.album-how .ghost { width: 100%; }
 .album .link { align-self: flex-start; padding-left: 0; }
 .finish-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
 
@@ -215,5 +211,3 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px;
   z-index: 100; max-width: calc(100% - 32px);
 }
-.mini.mix::after { content: none; }
-.mini.mix img { opacity: 1; }
