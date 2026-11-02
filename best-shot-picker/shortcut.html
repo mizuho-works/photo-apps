@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ショートカットの作り方</title>
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="icon-180.png">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .guide { padding-bottom: 40px; }
+    .guide h2 { font-size: 17px; }
+    .guide ol { padding-left: 22px; margin: 6px 0; }
+    .guide li { margin: 8px 0; line-height: 1.6; }
+    .guide .act { display: inline-block; font-weight: 700; padding: 1px 8px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    .guide .en { color: var(--muted); font-size: 12px; }
+    .guide .in { border-left: 3px solid var(--line); padding-left: 10px; margin: 6px 0 6px 2px; }
+    .guide code { font-size: 15px; font-weight: 700; padding: 0 4px; border-radius: 4px; background: var(--line); }
+    .guide .tip { font-size: 13px; color: var(--muted); }
+    .guide .preview { font-size: 13px; line-height: 1.8; background: var(--bg); border-radius: 12px; padding: 10px 12px; margin: 0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <header class="appbar">
+    <h1>ショートカットの作り方</h1>
+    <a class="icon-btn" href="./" aria-label="アプリに戻る">⌂</a>
+  </header>
+
+  <main class="screen guide">
+    <div class="card">
+      <p>ベストショット整理の削除候補を、写真アプリの<b>「削除候補」アルバム</b>に自動で入れるためのショートカットです。最初に一度だけ作れば、あとはボタンを押すだけで使えます。</p>
+      <p class="tip">アクションは、ショートカット編集画面の下にある検索欄に名前を入れると見つかります。iOSのバージョンによって表示が少し違うことがあるので、英語名も添えています。</p>
+    </div>
+
+    <div class="card">
+      <h2>1. アルバムを用意する</h2>
+      <ol>
+        <li>写真アプリ →「アルバム」→ 左上の<b>＋</b> →「新規アルバム」</li>
+        <li>名前を <code>削除候補</code> にして保存（写真は選ばなくてOK）</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>2. ショートカットを作る</h2>
+      <ol>
+        <li>「ショートカット」アプリ → 右上の<b>＋</b></li>
+        <li>上の名前を <code>削除候補に追加</code> にする<br><span class="tip">※ 一字でも違うとアプリから呼び出せません</span></li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>3. アクションを順番に追加する</h2>
+      <ol>
+        <li><span class="act">テキストを分割</span> <span class="en">Split Text</span><br>
+          青い「テキスト」をタップ →<b>「ショートカットの入力」</b>を選ぶ。区切りは<b>「改行」</b>。</li>
+        <li><span class="act">各項目を繰り返す</span> <span class="en">Repeat with Each</span><br>
+          対象が「分割されたテキスト」になっていればOK。</li>
+      </ol>
+      <p class="small"><b>ここから下の3〜6は「繰り返す」と「繰り返しの終了」の間</b>に入れます。</p>
+      <ol start="3" class="in">
+        <li><span class="act">テキストを分割</span> <span class="en">Split Text</span><br>
+          入力は<b>「繰り返し項目」</b>。区切りを<b>「カスタム」</b>にして <code>,</code>（半角カンマ）を入れる。</li>
+        <li><span class="act">リストから項目を取得</span> <span class="en">Get Item from List</span><br>
+          <b>「最初の項目」</b>のまま。入力が 3 の「分割されたテキスト」になっていることを確認。</li>
+        <li><span class="act">リストから項目を取得</span> <span class="en">Get Item from List</span><br>
+          <b>「最後の項目」</b>に変える。入力の部分を長押し →「変数を選択」→ 3 の<b>「分割されたテキスト」</b>をタップ。</li>
+        <li><span class="act">写真を検索</span> <span class="en">Find Photos</span><br>
+          はじめから入っている条件があれば ⊖ で消す →「フィルタを追加」→ 項目を<b>「作成日」</b>、条件を<b>「範囲内」</b>（英語表示では <i>is between</i>）にする。<br>
+          1つ目の日付欄に 4 の<b>「項目」</b>、2つ目に 5 の<b>「項目」</b>を入れる（欄をタップ →「変数を選択」）。<br>
+          「制限」がオンならオフにする。</li>
+      </ol>
+      <p class="small"><b>ここから下は「繰り返しの終了」の下</b>に入れます。</p>
+      <ol start="7">
+        <li><span class="act">アルバムに追加</span> <span class="en">Add to Album</span><br>
+          入力を<b>「繰り返しの結果」</b>、アルバムを<b>「削除候補」</b>にする。</li>
+        <li><span class="act">数を取得</span> <span class="en">Count</span><br>
+          入力を<b>「繰り返しの結果」</b>にする。</li>
+        <li><span class="act">通知を表示</span> <span class="en">Show Notification</span><br>
+          本文を「<b>［数］</b>件を削除候補に入れました」にする（［数］は 8 の結果を変数で入れる）。</li>
+      </ol>
+      <p class="small">できあがりはこんな形です：</p>
+<pre class="preview">ショートカットの入力 を 改行 で分割
+各項目を繰り返す
+    繰り返し項目 を「,」で分割
+    最初の項目 を取得
+    最後の項目 を取得
+    作成日 が［最初］〜［最後］の写真を検索
+繰り返しの終了
+繰り返しの結果 を「削除候補」アルバムに追加
+繰り返しの結果 の数を取得
+通知「○件を削除候補に入れました」</pre>
+      <p>右上の「完了」で保存します。</p>
+    </div>
+
+    <div class="card">
+      <h2>4. 使ってみる</h2>
+      <ol>
+        <li>ベストショット整理の「削除の手順」画面で<b>「削除候補」アルバムに入れる</b>をタップ</li>
+        <li>「ショートカットを開きますか？」→<b>「開く」</b>。写真へのアクセスを聞かれたら<b>「許可」</b></li>
+        <li>通知の件数が、ボタンに出ていた件数と同じくらいか確認</li>
+        <li>写真アプリで「削除候補」アルバムを開いて、中身をざっと確認</li>
+      </ol>
+      <p class="tip">連写のように同じ秒に何枚も撮った写真は、秒単位でしか探せないため、「残す」写真が一緒に入ることがあります。アプリの画面に⚠で表示されるので、その写真は選択から外してから消してください。</p>
+    </div>
+
+    <div class="card">
+      <h2>うまくいかないとき</h2>
+      <ul>
+        <li><b>「ショートカットが見つかりません」</b>… 名前が <code>削除候補に追加</code> と完全に同じか確認。</li>
+        <li><b>0件になる</b>… 6 の「写真を検索」で、はじめから入っていた条件（アルバムなど）が残っていないか確認。</li>
+        <li><b>「ショートカットの入力」が選べない</b>… ショートカットの編集画面下の ⓘ →「共有シートに表示」をオンにすると選べるようになります。</li>
+        <li><b>関係ない写真がたくさん入る</b>… アルバムから選んで「アルバムから取り除く」で外せます。写真自体は消えません。</li>
+      </ul>
+    </div>
+
+    <p style="text-align:center"><a class="primary" href="./">アプリに戻る</a></p>
+  </main>
+</body>
+</html>
