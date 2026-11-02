@@ -80,24 +80,15 @@
   <!-- 4. 削除の手順 -->
   <section id="screen-finish" class="screen" hidden>
     <div class="card album">
-      <h2>「削除候補」アルバムにまとめる</h2>
-      <p class="small">iPhoneの「ショートカット」アプリを使って、削除候補を写真アプリの<b>「削除候補」アルバム</b>に自動で入れます。あとはアルバムで「すべて選択」して消すだけです。</p>
-      <button id="btn-album" class="primary album-btn">アルバムに入れる</button>
+      <h2>まとめて削除する</h2>
+      <p class="small">iPhoneの「ショートカット」アプリを使って、削除候補を写真アプリから<b>まとめて削除</b>します。消す前に「○枚の写真を削除しますか？」と確認が出ます。</p>
+      <button id="btn-album" class="primary album-btn">まとめて削除</button>
       <p id="album-note" class="muted small"></p>
       <div id="album-mix" hidden>
-        <p class="small"><b>⚠ 同じ秒に撮った「残す」写真もアルバムに入ることがあります。</b>アルバムで見つけたら、消す前に選択から外してください。</p>
+        <p class="small"><b>⚠ 次の写真は自動では消しません。</b>同じ秒に「残す」写真があり、間違って消してしまうのを防ぐためです。下の一覧を見て手で消してください。</p>
         <div class="strip" id="album-mix-strip"></div>
       </div>
-      <details class="album-how">
-        <summary>アルバムに入れたあとの消し方</summary>
-        <ol class="small">
-          <li>写真アプリ →「アルバム」→<b>「削除候補」</b>を開く</li>
-          <li>右上の<b>「選択」</b>→<b>「すべて選択」</b>（上の⚠の写真があれば外す）</li>
-          <li>🗑 →<b>「削除」</b>（「アルバムから取り除く」ではなく「削除」）</li>
-          <li>ここに戻って下のボタンをタップ</li>
-        </ol>
-        <button id="btn-album-done" class="ghost">アルバムの写真を消した → 全部を削除済みにする</button>
-      </details>
+      <button id="btn-album-done" class="ghost" hidden>削除できた → 削除済みにする</button>
       <a class="link" href="shortcut.html">初めて使うとき：ショートカットの作り方（5分）</a>
     </div>
 

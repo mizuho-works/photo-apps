@@ -410,21 +410,26 @@ function renderFinish() {
   renderAlbum();
 }
 
-// ---------- 「削除候補」アルバム（iPhone のショートカット経由） ----------
+// ---------- まとめて削除（iPhone のショートカット経由） ----------
 // Web から写真ライブラリは触れないので、削除候補の撮影時刻（秒単位の範囲）を
-// ショートカット「削除候補に追加」に渡し、そちらで写真を探してアルバムに入れてもらう。
+// ショートカット「ベストショット削除」に渡し、そちらで写真を探して削除してもらう。
+// ショートカットは秒単位でしか探せないため、同じ秒に「残す」写真がある候補は
+// 自動削除の対象から外し、手で消してもらう。
 
-const SHORTCUT_NAME = '削除候補に追加';
+const SHORTCUT_NAME = 'ベストショット削除';
 const secOf = (ms) => Math.floor(ms / 1000);
 function fmtStamp(sec) {
   const d = new Date(sec * 1000);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function albumPlan() {
+function deletePlan() {
   const del = state.items.filter((i) => i.decision === 'delete' && !i.done);
+  const keepSecs = new Set(state.items.filter((i) => i.decision !== 'delete' && i.time != null).map((i) => secOf(i.time)));
   const timed = del.filter((i) => i.time != null);
-  const secs = [...new Set(timed.map((i) => secOf(i.time)))].sort((a, b) => a - b);
+  const auto = timed.filter((i) => !keepSecs.has(secOf(i.time)));
+  const manual = timed.filter((i) => keepSecs.has(secOf(i.time)));
+  const secs = [...new Set(auto.map((i) => secOf(i.time)))].sort((a, b) => a - b);
   // 続いている秒はひとつの範囲にまとめる（ショートカットの検索回数を減らす）
   const ranges = [];
   for (const s of secs) {
@@ -432,39 +437,40 @@ function albumPlan() {
     if (last && s === last[1]) last[1] = s + 1;
     else ranges.push([s, s + 1]);
   }
-  const secSet = new Set(secs);
-  const mixed = state.items.filter((i) => i.decision !== 'delete' && i.time != null && secSet.has(secOf(i.time)));
-  return { del, timed, ranges, mixed, untimed: del.length - timed.length };
+  return { auto, manual, ranges, untimed: del.length - timed.length };
 }
 
 function renderAlbum() {
-  const p = albumPlan();
+  const p = deletePlan();
   const btn = $('#btn-album');
-  btn.disabled = !p.timed.length;
-  btn.textContent = p.timed.length ? `「削除候補」アルバムに入れる（${p.timed.length}件）` : 'アルバムに入れる写真はありません';
+  btn.disabled = !p.auto.length;
+  btn.textContent = p.auto.length ? `${p.auto.length}件をまとめて削除` : 'まとめて削除できる写真はありません';
   const notes = [];
-  if (p.untimed) notes.push(`撮影日時がわからない ${p.untimed} 件は入れられません。下の一覧を見て手で消してください。`);
-  notes.push('初めてのときは「ショートカットを開きますか？」と聞かれるので「開く」を選んでください。');
+  if (p.untimed) notes.push(`撮影日時がわからない ${p.untimed} 件は自動では消せません。下の一覧を見て手で消してください。`);
+  notes.push('初めてのときは「ショートカットを開きますか？」と聞かれるので「開く」を選んでください。消した写真は「最近削除した項目」に30日間残ります。');
   $('#album-note').textContent = notes.join(' ');
-  $('#album-mix').hidden = !p.mixed.length;
-  $('#album-mix-strip').innerHTML = p.mixed
-    .map((i) => `<div class="mini keep mix">${i.thumbUrl ? `<img src="${i.thumbUrl}" loading="lazy" alt="">` : ''}<span class="t">${fmtClock(i.time)}</span></div>`)
+  $('#album-mix').hidden = !p.manual.length;
+  $('#album-mix-strip').innerHTML = p.manual
+    .map((i) => `<div class="mini del">${i.thumbUrl ? `<img src="${i.thumbUrl}" loading="lazy" alt="">` : ''}<span class="t">${fmtClock(i.time)}</span></div>`)
     .join('');
+  $('#btn-album-done').hidden = !p.auto.length || !state.shortcutSent;
 }
 
 $('#btn-album').onclick = () => {
-  const p = albumPlan();
+  const p = deletePlan();
   if (!p.ranges.length) return;
   const text = p.ranges.map(([a, b]) => `${fmtStamp(a)},${fmtStamp(b)}`).join('\n');
+  state.shortcutSent = true;
   location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_NAME)}&input=text&text=${encodeURIComponent(text)}`;
-  $('.album-how').open = true;
+  renderAlbum();
 };
 
 $('#btn-album-done').onclick = () => {
-  const p = albumPlan();
-  if (!p.timed.length) return;
-  if (!confirm(`アルバムに入れた ${p.timed.length} 件を「削除した」にしますか？`)) return;
-  p.timed.forEach((i) => (i.done = true));
+  const p = deletePlan();
+  if (!p.auto.length) return;
+  if (!confirm(`ショートカットで消した ${p.auto.length} 件を「削除した」にしますか？`)) return;
+  p.auto.forEach((i) => (i.done = true));
+  state.shortcutSent = false;
   saveSession();
   renderFinish();
   toast('削除済みにしました');
