@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="写真アプリ">
+<title>写真アプリ</title>
+<style>
+  :root { --bg:#f2f3f6; --card:#fff; --fg:#1b2230; --mute:#5d6676; --line:#dde0e6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111318; --card:#1b1e26; --fg:#eef0f5; --mute:#9aa1b2; --line:#2b2f3a; } }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    padding:env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 24px) max(16px, env(safe-area-inset-left)); }
+  main { max-width:640px; margin:0 auto; }
+  h1 { font-size:22px; margin:20px 0 4px; }
+  p.lead { margin:0 0 16px; color:var(--mute); font-size:13px; }
+  ul { list-style:none; margin:0; padding:0; display:grid; gap:10px; }
+  a { display:grid; grid-template-columns:52px 1fr auto; gap:12px; align-items:center; padding:12px 14px;
+    background:var(--card); border:1px solid var(--line); border-radius:16px; color:inherit; text-decoration:none; }
+  a:active { opacity:.7; }
+  img { width:52px; height:52px; border-radius:12px; display:block; }
+  b { display:block; font-size:16px; }
+  span { display:block; color:var(--mute); font-size:12.5px; line-height:1.5; margin-top:2px; }
+  i { font-style:normal; color:var(--mute); font-size:20px; }
+  footer { margin-top:18px; color:var(--mute); font-size:12px; line-height:1.6; }
+</style>
+</head>
+<body>
+<main>
+  <h1>写真アプリ</h1>
+  <p class="lead">写真・動画の整理に使う道具をまとめています。</p>
+  <ul>
+    <li><a href="best-shot-picker/"><img src="best-shot-picker/icon-180.png" alt=""><div><b>ベストショット整理</b><span>連写した写真・動画から「いらないかも」を自動で選ぶ</span></div><i>›</i></a></li>
+    <li><a href="koma/"><img src="koma/icon.svg" alt=""><div><b>コマ選び</b><span>動画からアルバム用の一枚を切り出す</span></div><i>›</i></a></li>
+    <li><a href="hizuke/"><img src="hizuke/icon.svg" alt=""><div><b>日付そろえ</b><span>切り出した写真に、元の動画の撮影日時を入れる</span></div><i>›</i></a></li>
+    <li><a href="bounce/"><img src="bounce/icon.svg" alt=""><div><b>バウンスメーカー</b><span>動画の一部を「行って戻る」ループ動画にする</span></div><i>›</i></a></li>
+  </ul>
+  <footer>どのアプリも、写真や動画はこの端末の中だけで処理します。どこにも送信しません。<br>ホーム画面に追加するときは、使いたいアプリを開いてから「ホーム画面に追加」してください。</footer>
+</main>
+</body>
+</html>

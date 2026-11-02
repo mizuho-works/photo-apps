@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="バウンス">
+<meta name="theme-color" content="#111318">
+<title>バウンスメーカー</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root { --bg:#111318; --card:#1b1e26; --fg:#eef0f5; --mute:#9aa1b2; --acc:#ffb020; --acc2:#ff5a7a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px); }
+  header { padding:18px 16px 6px; }
+  h1 { margin:0; font-size:22px; }
+  h1 span { background:linear-gradient(90deg,var(--acc),var(--acc2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header p { margin:4px 0 0; color:var(--mute); font-size:13px; }
+  main { max-width:640px; margin:0 auto; padding:0 12px; }
+  .card { background:var(--card); border-radius:16px; padding:14px; margin-top:12px; }
+  .pick { display:block; text-align:center; padding:28px 12px; border:2px dashed #3a3f4d; border-radius:14px; color:var(--mute); cursor:pointer; }
+  .pick b { display:block; color:var(--fg); font-size:17px; margin-bottom:4px; }
+  input[type=file] { display:none; }
+  video, canvas.view { width:100%; max-height:60vh; object-fit:contain; background:#000; border-radius:12px; display:block; }
+  .row { margin-top:14px; }
+  .row label { display:flex; justify-content:space-between; font-size:14px; margin-bottom:6px; }
+  .row label output { color:var(--acc); font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; accent-color:var(--acc); height:28px; }
+  .seg { display:flex; gap:6px; }
+  .seg button { flex:1; padding:9px 0; border-radius:10px; border:1px solid #333847; background:transparent; color:var(--fg); font-size:14px; }
+  .seg button.on { background:var(--acc); color:#111; border-color:var(--acc); font-weight:700; }
+  .btn { width:100%; margin-top:14px; padding:15px; border:0; border-radius:14px; font-size:17px; font-weight:700;
+    background:linear-gradient(90deg,var(--acc),var(--acc2)); color:#111; }
+  .btn.sub { background:#2a2e3a; color:var(--fg); }
+  .btn:disabled { opacity:.45; }
+  .progress { height:6px; background:#2a2e3a; border-radius:3px; overflow:hidden; margin-top:12px; display:none; }
+  .progress > div { height:100%; width:0; background:var(--acc); transition:width .1s; }
+  .status { color:var(--mute); font-size:13px; margin-top:8px; min-height:1em; }
+  .hidden { display:none !important; }
+  a.dl { display:block; text-align:center; margin-top:10px; color:var(--acc); font-size:14px; }
+  .note { color:var(--mute); font-size:12px; line-height:1.6; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>バウンス</span>メーカー</h1>
+  <p>動画の一部を「行って戻る」ループ動画にします。処理はすべて端末内で行われます。</p>
+</header>
+<main>
+  <section class="card">
+    <label class="pick" id="pickLabel">
+      <b>🎬 動画を選ぶ</b>タップしてカメラロールから選択
+      <input type="file" id="file" accept="video/*">
+    </label>
+    <div id="editor" class="hidden">
+      <video id="src" playsinline muted preload="auto"></video>
+      <div class="row">
+        <label>開始位置 <output id="startOut">0.00s</output></label>
+        <input type="range" id="start" min="0" max="1" step="0.01" value="0">
+      </div>
+      <div class="row">
+        <label>長さ <output id="lenOut">1.5s</output></label>
+        <input type="range" id="len" min="0.3" max="4" step="0.1" value="1.5">
+      </div>
+      <div class="row">
+        <label>スピード</label>
+        <div class="seg" data-key="speed">
+          <button data-v="0.5">0.5x</button><button data-v="1">1x</button><button data-v="1.5" class="on">1.5x</button><button data-v="2">2x</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>ループ回数（書き出し時）</label>
+        <div class="seg" data-key="loops">
+          <button data-v="1">1</button><button data-v="2">2</button><button data-v="3" class="on">3</button><button data-v="5">5</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>画質</label>
+        <div class="seg" data-key="size">
+          <button data-v="480">低</button><button data-v="720" class="on">中</button><button data-v="1080">高</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>なめらかさ (fps)</label>
+        <div class="seg" data-key="fps">
+          <button data-v="15">15</button><button data-v="24">24</button><button data-v="30" class="on">30</button>
+        </div>
+      </div>
+      <button class="btn" id="make">バウンスを作る</button>
+      <div class="progress" id="prog"><div></div></div>
+      <div class="status" id="status"></div>
+    </div>
+  </section>
+
+  <section class="card hidden" id="previewCard">
+    <canvas class="view" id="view"></canvas>
+    <button class="btn" id="export">動画として書き出す</button>
+  </section>
+
+  <section class="card hidden" id="resultCard">
+    <video id="result" playsinline loop muted autoplay controls></video>
+    <button class="btn" id="share">保存 / 共有</button>
+    <a class="dl" id="dl" download>ファイルをダウンロード</a>
+  </section>
+
+  <p class="note">
+    ・iPhoneでは「保存 / 共有」→「ビデオを保存」で写真アプリに保存できます。<br>
+    ・長い動画・高画質ほどメモリを使います。うまくいかない時は画質を下げてください。
+  </p>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const fileIn = $('file'), src = $('src'), view = $('view'), vctx = view.getContext('2d');
+  const startIn = $('start'), lenIn = $('len');
+  const opts = { speed: 1.5, loops: 3, size: 720, fps: 30 };
+  let frames = [], playing = 0, srcURL = null, resultURL = null, resultBlob = null, primed = false;
+
+  // segmented buttons
+  document.querySelectorAll('.seg').forEach(seg => {
+    seg.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      opts[seg.dataset.key] = parseFloat(b.dataset.v);
+    });
+  });
+
+  const setStatus = t => $('status').textContent = t;
+  const setProg = p => {
+    $('prog').style.display = p == null ? 'none' : 'block';
+    $('prog').firstElementChild.style.width = ((p || 0) * 100) + '%';
+  };
+
+  fileIn.addEventListener('change', () => {
+    const f = fileIn.files[0]; if (!f) return;
+    if (srcURL) URL.revokeObjectURL(srcURL);
+    srcURL = URL.createObjectURL(f);
+    primed = false;
+    src.src = srcURL;
+    src.load();
+    $('pickLabel').querySelector('b').textContent = '🎬 別の動画を選ぶ';
+    $('editor').classList.remove('hidden');
+    $('previewCard').classList.add('hidden');
+    $('resultCard').classList.add('hidden');
+    stopPreview();
+    setStatus('読み込み中…');
+  });
+
+  src.addEventListener('loadedmetadata', () => {
+    const d = src.duration;
+    startIn.max = Math.max(0, d - 0.3).toFixed(2);
+    startIn.value = 0;
+    lenIn.max = Math.min(4, d).toFixed(1);
+    lenIn.value = Math.min(1.5, d).toFixed(1);
+    updateOut();
+    seek(0.001);
+    setStatus(`${d.toFixed(1)}秒 / ${src.videoWidth}×${src.videoHeight}`);
+  });
+
+  function updateOut() {
+    $('startOut').textContent = (+startIn.value).toFixed(2) + 's';
+    $('lenOut').textContent = (+lenIn.value).toFixed(1) + 's';
+  }
+  startIn.addEventListener('input', () => { updateOut(); src.currentTime = +startIn.value; });
+  lenIn.addEventListener('input', updateOut);
+
+  function seek(t) {
+    return new Promise(res => {
+      const done = () => { src.removeEventListener('seeked', done); clearTimeout(to); res(); };
+      const to = setTimeout(done, 3000);
+      src.addEventListener('seeked', done);
+      src.currentTime = t;
+    });
+  }
+
+  async function prime() {
+    // iOS Safari doesn't paint video frames to canvas until it has played once
+    if (primed) return;
+    try { await src.play(); } catch (e) {}
+    src.pause();
+    primed = true;
+  }
+
+  $('make').addEventListener('click', async () => {
+    if (!src.duration) return;
+    $('make').disabled = true;
+    stopPreview();
+    frames.forEach(f => f.close && f.close());
+    frames = [];
+    try {
+      await prime();
+      const start = +startIn.value;
+      const end = Math.min(src.duration - 0.01, start + (+lenIn.value));
+      const step = opts.speed / opts.fps;
+      const times = [];
+      for (let t = start; t <= end; t += step) times.push(t);
+      if (times.length < 2) throw new Error('範囲が短すぎます');
+
+      const scale = Math.min(1, opts.size / Math.max(src.videoWidth, src.videoHeight));
+      const w = Math.round(src.videoWidth * scale / 2) * 2, h = Math.round(src.videoHeight * scale / 2) * 2;
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const cx = c.getContext('2d');
+      setStatus('フレームを取り出し中…');
+      for (let i = 0; i < times.length; i++) {
+        await seek(times[i]);
+        cx.drawImage(src, 0, 0, w, h);
+        let fr;
+        if (window.createImageBitmap) fr = await createImageBitmap(c);
+        else { fr = document.createElement('canvas'); fr.width = w; fr.height = h; fr.getContext('2d').drawImage(c, 0, 0); }
+        frames.push(fr);
+        setProg((i + 1) / times.length);
+      }
+      view.width = w; view.height = h;
+      $('previewCard').classList.remove('hidden');
+      $('resultCard').classList.add('hidden');
+      setStatus(`${frames.length}フレーム（${w}×${h}）`);
+      startPreview();
+      $('previewCard').scrollIntoView({ behavior: 'smooth' });
+    } catch (e) {
+      setStatus('エラー: ' + e.message);
+    } finally {
+      setProg(null);
+      $('make').disabled = false;
+    }
+  });
+
+  // forward then backward, without repeating the end frames
+  const bounceOrder = () => {
+    const n = frames.length, o = [];
+    for (let i = 0; i < n; i++) o.push(i);
+    for (let i = n - 2; i > 0; i--) o.push(i);
+    return o;
+  };
+
+  function startPreview() {
+    const order = bounceOrder(), id = ++playing, iv = 1000 / opts.fps;
+    let t0 = performance.now();
+    const tick = now => {
+      if (id !== playing) return;
+      const k = Math.max(0, Math.floor((now - t0) / iv)) % order.length;
+      vctx.drawImage(frames[order[k]], 0, 0);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  function stopPreview() { playing++; }
+
+  function pickMime() {
+    if (!window.MediaRecorder) return null;
+    const list = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    return list.find(m => MediaRecorder.isTypeSupported(m)) || '';
+  }
+
+  $('export').addEventListener('click', async () => {
+    const mime = pickMime();
+    if (mime === null || !view.captureStream) { alert('このブラウザは動画の書き出しに対応していません'); return; }
+    $('export').disabled = true; $('make').disabled = true;
+    stopPreview();
+    const order = bounceOrder(), fps = opts.fps, iv = 1000 / fps;
+    const seq = [];
+    for (let l = 0; l < opts.loops; l++) seq.push(...order);
+    seq.push(0);
+
+    const stream = view.captureStream(fps);
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined);
+    const chunks = [];
+    rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    const stopped = new Promise(r => rec.onstop = r);
+
+    vctx.drawImage(frames[0], 0, 0);
+    rec.start();
+    setStatus('書き出し中…（再生時間ぶんかかります）');
+    await new Promise(res => {
+      const t0 = performance.now();
+      const tick = now => {
+        const k = Math.max(0, Math.floor((now - t0) / iv));
+        if (k >= seq.length) return res();
+        vctx.drawImage(frames[seq[k]], 0, 0);
+        setProg(k / seq.length);
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await new Promise(r => setTimeout(r, iv * 2));
+    rec.stop();
+    await stopped;
+    stream.getTracks().forEach(t => t.stop());
+
+    const type = (rec.mimeType || mime || 'video/webm').split(';')[0];
+    resultBlob = new Blob(chunks, { type });
+    if (resultURL) URL.revokeObjectURL(resultURL);
+    resultURL = URL.createObjectURL(resultBlob);
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const name = `bounce_${Date.now()}.${ext}`;
+    $('result').src = resultURL;
+    $('dl').href = resultURL; $('dl').download = name;
+    $('share').dataset.name = name;
+    $('resultCard').classList.remove('hidden');
+    $('resultCard').scrollIntoView({ behavior: 'smooth' });
+    setProg(null);
+    setStatus(`完成！ ${(resultBlob.size / 1024 / 1024).toFixed(1)}MB (${ext})`);
+    $('export').disabled = false; $('make').disabled = false;
+    startPreview();
+  });
+
+  $('share').addEventListener('click', async () => {
+    if (!resultBlob) return;
+    const file = new File([resultBlob], $('share').dataset.name, { type: resultBlob.type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); } catch (e) {}
+    } else {
+      $('dl').click();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,522 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>日付そろえ</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="日付そろえ">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+</head><body>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* Layout: one narrow column, three steps top to bottom (videos, photos, results), built for a phone held in one hand */
+:root {
+  --bg: #eef0f3; --surface: #ffffff; --ink: #1b2230; --muted: #5d6676; --line: #d6dae2;
+  --accent: #2f55d4; --accent-ink: #ffffff; --ok: #1f8a4c; --warn: #b9770e; --bad: #c43d3d; --stage: #0f1218;
+  --f-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151b; --surface: #1a1f27; --ink: #e6e9ef; --muted: #98a1b0; --line: #2b323d;
+  --accent: #7d98ff; --accent-ink: #0d1220; --ok: #5fcf8f; --warn: #f2b437; --bad: #ef6b6b; --stage: #07090c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151b; --surface: #1a1f27; --ink: #e6e9ef; --muted: #98a1b0; --line: #2b323d;
+  --accent: #7d98ff; --accent-ink: #0d1220; --ok: #5fcf8f; --warn: #f2b437; --bad: #ef6b6b; --stage: #07090c; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.55; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 40px; max-width: 760px; margin: 0 auto; display: grid; gap: 14px; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+.lead { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 14px; display: grid; gap: 10px; min-width: 0; }
+.panel h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .08em; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 12px 14px; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn:hover { border-color: var(--muted); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; font-size: 16px; }
+.btn.small { min-height: 0; padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row .grow { flex: 1 1 200px; }
+.link { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 4px; font-size: 12px; }
+.note { margin: 0; font-size: 12px; color: var(--muted); }
+
+ul.vl { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.vl li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.vl .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.vl .dt { grid-column: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--muted); }
+.vl input[type="datetime-local"] { font-family: var(--f-mono); font-size: 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; color: var(--ink); max-width: 100%; }
+.vl .x { grid-column: 2; grid-row: 1 / span 2; background: none; border: 0; font-size: 20px; color: var(--muted); padding: 8px; }
+.warn { color: var(--bad); font-weight: 700; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
+.grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; display: block; background: var(--stage); }
+
+.prog { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.prog > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+.msg { font-size: 13px; color: var(--muted); min-height: 1.5em; }
+
+.sum { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+.sum b { font-family: var(--f-mono); font-size: 18px; }
+ul.rl { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rl li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; align-items: start; }
+.rl img { width: 76px; height: 76px; object-fit: cover; border-radius: 6px; background: var(--stage); display: block; }
+.rl .info { display: grid; gap: 4px; min-width: 0; }
+.rl .fn { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl .when { font-family: var(--f-mono); font-size: 15px; }
+.rl .src { font-size: 12px; color: var(--muted); }
+.rl select { width: 100%; max-width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 5px 6px; font-size: 14px; color: var(--ink); }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; margin-left: 6px; vertical-align: 2px; }
+.tag.ok { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+.tag.check { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.tag.none { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.how { margin: 0; padding-left: 1.3em; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 99px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); z-index: 20; }
+.toast.on { opacity: 1; }
+body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
+@media (max-width: 480px) { .vl input[type="datetime-local"], .rl select { font-size: 16px; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>日付そろえ</h1>
+    <p class="lead">切り出した写真が、どの動画のどの場面かを自動で探して、その動画の撮影日時を写真に入れます。</p>
+  </header>
+
+  <section class="panel">
+    <h2><span>1. 元の動画</span><span id="vCount" class="mono"></span></h2>
+    <div class="row">
+      <button class="btn grow" id="pickV">＋ 動画を選ぶ</button>
+      <button class="link" id="clearV" hidden>全部はずす</button>
+    </div>
+    <ul class="vl" id="vList"></ul>
+    <p class="note" id="vNote">写真を切り出した動画を、まとめて選んでください。動画の中身は読み取って照合するだけで、どこにも送られません。</p>
+  </section>
+
+  <section class="panel">
+    <h2><span>2. 切り出した写真</span><span id="pCount" class="mono"></span></h2>
+    <div class="row">
+      <button class="btn grow" id="pickP">＋ 写真を選ぶ</button>
+      <button class="link" id="clearP" hidden>全部はずす</button>
+    </div>
+    <div class="grid" id="pGrid"></div>
+  </section>
+
+  <section class="panel">
+    <button class="btn primary" id="run" disabled>日付を調べる</button>
+    <div class="prog" id="progBox" hidden><div id="prog"></div></div>
+    <div class="msg" id="msg">動画と写真を選ぶと押せます。</div>
+  </section>
+
+  <section class="panel" id="results" hidden>
+    <h2><span>結果</span></h2>
+    <div class="sum" id="sum"></div>
+    <ul class="rl" id="rList"></ul>
+    <button class="btn primary" id="save" disabled>日付を付けて保存（ZIP）</button>
+    <ol class="how">
+      <li>保存したZIPを「ファイル」アプリでタップして開きます。</li>
+      <li>右上のメニューから「選択」→「すべて選択」。</li>
+      <li>左下の共有ボタンから「○枚の画像を保存」を選びます。</li>
+      <li>写真アプリに、動画の撮影日時で並びます。</li>
+    </ol>
+    <p class="note">すでに写真アプリに入っている写真は、保存し直すと重複します。古いほうは消してください。</p>
+  </section>
+</div>
+<input type="file" id="fileV" accept="video/*,.mov,.mp4,.m4v" multiple hidden>
+<input type="file" id="fileP" accept="image/*" multiple hidden>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+  const once = (el, ev, ms) => new Promise(res => { const h = () => { clearTimeout(tm); el.removeEventListener(ev, h); res(true); }; const tm = setTimeout(() => { el.removeEventListener(ev, h); res(false); }, ms); el.addEventListener(ev, h); });
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const S = { videos: [], photos: [], busy: false, done: false };
+  let uid = 0, toastTm;
+  const dlPromise = (async () => { try { return window.claude?.use ? await window.claude.use('downloads') : null; } catch { return null; } })();
+
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTm); toastTm = setTimeout(() => t.classList.remove('on'), 2200); }
+
+  // ---------- dates ----------
+  const offStr = off => (off < 0 ? '-' : '+') + pad(Math.floor(Math.abs(off) / 60)) + ':' + pad(Math.abs(off) % 60);
+  const localOff = ms => -new Date(ms).getTimezoneOffset();
+  const wallParts = (ms, off) => { const x = new Date(ms + off * 60000); return [x.getUTCFullYear(), x.getUTCMonth() + 1, x.getUTCDate(), x.getUTCHours(), x.getUTCMinutes(), x.getUTCSeconds()]; };
+  const fmtDT = (ms, off) => { const [Y, M, D, h, m, s] = wallParts(ms, off); return Y + '/' + pad(M) + '/' + pad(D) + ' ' + pad(h) + ':' + pad(m) + ':' + pad(s); };
+  const fmtT = t => Math.floor(t / 60) + ':' + pad(Math.floor(t % 60)) + '.' + Math.floor((t % 1) * 10);
+
+  async function readMovieDate(file) {
+    let pos = 0, moov = null, guard = 0;
+    while (pos + 8 <= file.size && guard++ < 64) {
+      const h = new DataView(await file.slice(pos, pos + 16).arrayBuffer());
+      let size = h.getUint32(0), hdr = 8;
+      const type = String.fromCharCode(h.getUint8(4), h.getUint8(5), h.getUint8(6), h.getUint8(7));
+      if (size === 1) { size = Number(h.getBigUint64(8)); hdr = 16; } else if (size === 0) size = file.size - pos;
+      if (size < hdr) return null;
+      if (type === 'moov') { moov = [pos + hdr, pos + size]; break; }
+      pos += size;
+    }
+    if (!moov || moov[1] - moov[0] > 64e6) return null;
+    const buf = new Uint8Array(await file.slice(moov[0], moov[1]).arrayBuffer());
+    const txt = new TextDecoder('latin1').decode(buf);
+    const m = txt.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?([+-])(\d{2}):?(\d{2})/);
+    if (m) {
+      const off = (m[7] === '-' ? -1 : 1) * (+m[8] * 60 + +m[9]);
+      const ms = Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - off * 60000;
+      if (ms > Date.UTC(2001, 0, 1)) return { ms, off, src: '動画の撮影日時' };
+    }
+    const i = txt.indexOf('mvhd');
+    if (i >= 0) {
+      const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+      const sec = buf[i + 4] === 1 ? Number(dv.getBigUint64(i + 8)) : dv.getUint32(i + 8);
+      const ms = (sec - 2082844800) * 1000;
+      if (ms > Date.UTC(2001, 0, 1) && ms < Date.now() - 600000) return { ms, off: localOff(ms), src: '動画の記録日時' };
+    }
+    return null;
+  }
+  async function detectDate(v) {
+    let d = null;
+    try { d = await readMovieDate(v.file); } catch {}
+    const lm = v.file.lastModified;
+    if (!d && lm && Date.now() - lm > 600000) d = { ms: lm, off: localOff(lm), src: 'ファイルの日時' };
+    v.date = d || { ms: null, off: localOff(Date.now()), src: '不明' };
+    renderVideos(); renderRunState();
+  }
+
+  // ---------- JPEG + EXIF ----------
+  function exifSegment(dateStr, tz) {
+    const enc = s => [...s].map(c => c.charCodeAt(0)).concat(0);
+    const ifd0 = [[0x0132, 2, enc(dateStr)], [0x8769, 4, null]];
+    const exif = [[0x9000, 7, [48, 50, 51, 50]], [0x9003, 2, enc(dateStr)], [0x9004, 2, enc(dateStr)], [0x9010, 2, enc(tz)], [0x9011, 2, enc(tz)], [0x9012, 2, enc(tz)]];
+    const ifdSize = n => 2 + n * 12 + 4;
+    const dataSize = list => list.reduce((a, e) => a + (e[2] && e[2].length > 4 ? e[2].length : 0), 0);
+    const ifd0Data = 8 + ifdSize(ifd0.length), exifOff = ifd0Data + dataSize(ifd0), exifData = exifOff + ifdSize(exif.length), total = exifData + dataSize(exif);
+    const b = new Uint8Array(total), dv = new DataView(b.buffer);
+    b.set([0x4d, 0x4d, 0, 42, 0, 0, 0, 8]);
+    const writeIFD = (off, list, d) => {
+      dv.setUint16(off, list.length); let p = off + 2;
+      for (const [tag, type, val] of list) {
+        dv.setUint16(p, tag); dv.setUint16(p + 2, type);
+        if (!val) { dv.setUint32(p + 4, 1); dv.setUint32(p + 8, exifOff); }
+        else { dv.setUint32(p + 4, val.length); if (val.length <= 4) b.set(val, p + 8); else { dv.setUint32(p + 8, d); b.set(val, d); d += val.length; } }
+        p += 12;
+      }
+      dv.setUint32(p, 0);
+    };
+    writeIFD(8, ifd0, ifd0Data); writeIFD(exifOff, exif, exifData);
+    const seg = new Uint8Array(10 + total);
+    seg.set([0xff, 0xe1]); new DataView(seg.buffer).setUint16(2, 8 + total); seg.set([0x45, 0x78, 0x69, 0x66, 0, 0], 4); seg.set(b, 10);
+    return seg;
+  }
+  const isJpeg = b => b[0] === 0xff && b[1] === 0xd8;
+  function orientationOf(b) {
+    try {
+      let i = 2;
+      while (i + 4 < b.length && b[i] === 0xff && b[i + 1] >= 0xe0 && b[i + 1] <= 0xef) {
+        const L = (b[i + 2] << 8) | b[i + 3];
+        if (b[i + 1] === 0xe1 && b[i + 4] === 0x45 && b[i + 5] === 0x78) {
+          const t = i + 10, le = b[t] === 0x49, dv = new DataView(b.buffer, b.byteOffset + t, L - 8);
+          const ifd = dv.getUint32(4, le), n = dv.getUint16(ifd, le);
+          for (let k = 0; k < n; k++) { const e = ifd + 2 + 12 * k; if (dv.getUint16(e, le) === 0x0112) return dv.getUint16(e + 8, le); }
+          return 1;
+        }
+        i += 2 + L;
+      }
+    } catch {}
+    return 1;
+  }
+  function injectExif(b, seg) {
+    const parts = [b.subarray(0, 2)]; let i = 2;
+    if (b[i] === 0xff && b[i + 1] === 0xe0) { const L = (b[i + 2] << 8) | b[i + 3]; parts.push(b.subarray(i, i + 2 + L)); i += 2 + L; }
+    parts.push(seg);
+    while (b[i] === 0xff && b[i + 1] >= 0xe0 && b[i + 1] <= 0xef) {
+      const L = (b[i + 2] << 8) | b[i + 3];
+      const isExif = b[i + 1] === 0xe1 && b[i + 4] === 0x45 && b[i + 5] === 0x78 && b[i + 6] === 0x69 && b[i + 7] === 0x66;
+      if (!isExif) parts.push(b.subarray(i, i + 2 + L));
+      i += 2 + L;
+    }
+    parts.push(b.subarray(i));
+    return parts;
+  }
+
+  // ---------- picture fingerprints ----------
+  // each picture is shrunk to 16x16 colour and normalised; two pictures of the same scene correlate near 1
+  const N = 16, mid = document.createElement('canvas'), small = document.createElement('canvas');
+  mid.width = mid.height = 64; small.width = small.height = N;
+  const mctx = mid.getContext('2d', { willReadFrequently: true }), sctx = small.getContext('2d', { willReadFrequently: true });
+  mctx.imageSmoothingQuality = sctx.imageSmoothingQuality = 'high';
+  function fingerprint(src, rot) {
+    mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.clearRect(0, 0, 64, 64);
+    mctx.translate(32, 32); mctx.rotate(rot * Math.PI / 2); mctx.drawImage(src, -32, -32, 64, 64);
+    sctx.clearRect(0, 0, N, N); sctx.drawImage(mid, 0, 0, N, N);
+    const d = sctx.getImageData(0, 0, N, N).data, v = new Float32Array(N * N * 3);
+    let k = 0, mean = 0;
+    for (let i = 0; i < d.length; i += 4) { v[k++] = d[i]; v[k++] = d[i + 1]; v[k++] = d[i + 2]; }
+    for (let i = 0; i < v.length; i++) mean += v[i]; mean /= v.length;
+    let nrm = 0; for (let i = 0; i < v.length; i++) { v[i] -= mean; nrm += v[i] * v[i]; }
+    nrm = Math.sqrt(nrm);
+    if (nrm < 1e-3) return v.fill(0);
+    for (let i = 0; i < v.length; i++) v[i] /= nrm;
+    return v;
+  }
+  const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+
+  // ---------- video access ----------
+  async function openVideo(v) {
+    const el = document.createElement('video');
+    el.muted = true; el.setAttribute('muted', ''); el.setAttribute('playsinline', ''); el.preload = 'auto'; el.src = v.url;
+    const ok = once(el, 'loadeddata', 20000), bad = once(el, 'error', 20000);
+    el.load();
+    // iOS only decodes frames after a muted play
+    el.play().catch(() => {});
+    const res = await Promise.race([ok.then(r => r && 'ok'), bad.then(r => r && 'bad')]);
+    if (res !== 'ok' || !(el.duration > 0)) { el.removeAttribute('src'); el.load(); return null; }
+    el.pause();
+    const seek = t => new Promise(r => {
+      t = Math.max(0, Math.min(el.duration - 0.05, t));
+      if (Math.abs(el.currentTime - t) < 0.001) { r(); return; }
+      const tm = setTimeout(r, 4000);
+      el.addEventListener('seeked', () => { clearTimeout(tm); setTimeout(r, 40); }, { once: true });
+      el.currentTime = t;
+    });
+    return { el, seek, fp: rot => fingerprint(el, rot || 0), close() { el.removeAttribute('src'); el.load(); } };
+  }
+
+  // ---------- matching ----------
+  const STEP = 0.4;
+  function setProg(f, text) { $('#progBox').hidden = false; $('#prog').style.width = Math.round(f * 100) + '%'; $('#msg').textContent = text; }
+  async function loadImg(p) { const img = new Image(); img.src = p.url; await img.decode(); return img; }
+
+  function bestIn(p, vids) {
+    let best = { score: -2 };
+    for (const v of vids) for (const f of v.frames || []) for (let r = 0; r < 4; r++) {
+      const s = dot(p.fp[r], f.vec) - (r ? 0.05 : 0);
+      if (s > best.score) best = { score: s, v, t: f.t, rot: r };
+    }
+    return best;
+  }
+
+  async function run() {
+    if (S.busy) return; S.busy = true; S.done = false; renderRunState();
+    try {
+      const vids = S.videos.filter(v => !v.bad || true);
+      for (let i = 0; i < S.photos.length; i++) {
+        const p = S.photos[i]; setProg(i / S.photos.length * 0.1, '写真を読み込み中 ' + (i + 1) + '/' + S.photos.length);
+        const img = await loadImg(p); p.fp = [0, 1, 2, 3].map(r => fingerprint(img, r)); p.choice = 'auto'; p.match = null;
+      }
+      for (let i = 0; i < vids.length; i++) {
+        const v = vids[i], h = await openVideo(v);
+        v.frames = []; v.bad = !h;
+        if (h) {
+          const n = Math.max(1, Math.ceil((h.el.duration - 0.1) / STEP));
+          for (let k = 0; k < n; k++) {
+            const t = 0.05 + k * STEP;
+            await h.seek(t); v.frames.push({ t, vec: h.fp(0) });
+            setProg(0.1 + 0.7 * (i + k / n) / vids.length, '動画を調べています ' + (i + 1) + '/' + vids.length + '：' + v.name);
+          }
+          h.close();
+        }
+      }
+      const good = vids.filter(v => v.frames.length);
+      for (const p of S.photos) { const b = good.length ? bestIn(p, good) : null; p.match = b && b.score > -2 ? b : null; }
+      // refine each match around its coarse time, frame by frame
+      const groups = new Map();
+      S.photos.forEach(p => { if (p.match && p.match.score > 0.5) { if (!groups.has(p.match.v)) groups.set(p.match.v, []); groups.get(p.match.v).push(p); } });
+      let gi = 0;
+      for (const [v, ps] of groups) {
+        const h = await openVideo(v); gi++;
+        if (!h) continue;
+        for (let k = 0; k < ps.length; k++) {
+          const p = ps[k], m = p.match; let bt = m.t, bs = -2;
+          for (let t = m.t - STEP; t <= m.t + STEP + 1e-6; t += 1 / 15) {
+            await h.seek(t); const s = dot(p.fp[m.rot], h.fp(0));
+            if (s > bs) { bs = s; bt = Math.max(0, Math.min(h.el.duration, h.el.currentTime)); }
+          }
+          if (bs > m.score) { m.score = bs; m.t = bt; }
+          setProg(0.8 + 0.2 * (gi - 1 + (k + 1) / ps.length) / groups.size, '場面を絞り込み中 ' + gi + '/' + groups.size);
+        }
+        h.close();
+      }
+      S.done = true;
+      $('#progBox').hidden = true; $('#msg').textContent = '調べ終わりました。結果を確認してください。';
+      renderResults();
+      $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      $('#msg').textContent = 'うまく調べられませんでした：' + (e && e.message || e);
+    } finally { S.busy = false; renderRunState(); }
+  }
+
+  // ---------- final decision per photo ----------
+  const OK = 0.8, CHECK = 0.55;
+  function decide(p) {
+    p.final = null;
+    if (p.choice === 'none') return;
+    if (p.choice === 'auto') {
+      const m = p.match; if (!m || m.score < CHECK || m.v.date.ms == null) return;
+      p.final = { v: m.v, t: m.t, rot: m.rot, score: m.score, manual: false };
+    } else {
+      const v = S.videos.find(x => x.id === +p.choice); if (!v) return;
+      const b = v.frames && v.frames.length ? bestIn(p, [v]) : null;
+      p.final = { v, t: b ? b.t : 0, rot: b && b.score > CHECK ? b.rot : 0, score: b ? b.score : 0, manual: true };
+    }
+  }
+  const finalMs = p => p.final && p.final.v.date.ms != null ? p.final.v.date.ms + p.final.t * 1000 : null;
+  const statusOf = p => { if (!p.final || finalMs(p) == null) return 'none'; if (p.final.manual) return 'check'; return p.final.score >= OK ? 'ok' : 'check'; };
+
+  // ---------- rendering ----------
+  function renderVideos() {
+    const ul = $('#vList'); ul.innerHTML = '';
+    S.videos.forEach(v => {
+      const li = document.createElement('li');
+      const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = v.name; nm.title = v.name;
+      const dt = document.createElement('div'); dt.className = 'dt';
+      const inp = document.createElement('input'); inp.type = 'datetime-local'; inp.step = '1'; inp.id = 'vd' + v.id; inp.setAttribute('aria-label', v.name + ' の撮影日時');
+      if (v.date && v.date.ms != null) { const [Y, M, D, h, m, s] = wallParts(v.date.ms, v.date.off); inp.value = Y + '-' + pad(M) + '-' + pad(D) + 'T' + pad(h) + ':' + pad(m) + ':' + pad(s); }
+      inp.addEventListener('change', () => {
+        const m = inp.value.match(/(\d+)-(\d+)-(\d+)T(\d+):(\d+)(?::(\d+))?/); if (!m) return;
+        const off = v.date ? v.date.off : localOff(Date.now());
+        v.date = { ms: Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) - off * 60000, off, src: '手入力' };
+        renderVideos(); if (S.done) renderResults(); renderRunState();
+      });
+      const src = document.createElement('span');
+      if (!v.date) src.textContent = '日時を読み取り中…';
+      else if (v.date.ms == null) { src.textContent = '読み取れませんでした。入力してください'; src.className = 'warn'; }
+      else src.textContent = v.date.src + '・' + offStr(v.date.off);
+      dt.append(inp, src);
+      const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', v.name + ' をはずす');
+      x.addEventListener('click', () => { URL.revokeObjectURL(v.url); S.videos = S.videos.filter(y => y !== v); S.photos.forEach(p => { if (p.choice === String(v.id)) p.choice = 'auto'; }); S.done = false; $('#results').hidden = true; renderVideos(); renderRunState(); });
+      li.append(nm, x, dt); ul.append(li);
+    });
+    $('#vCount').textContent = S.videos.length ? S.videos.length + '本' : '';
+    $('#clearV').hidden = !S.videos.length;
+  }
+  function renderPhotos() {
+    const g = $('#pGrid'); g.innerHTML = '';
+    S.photos.forEach(p => { const im = document.createElement('img'); im.src = p.url; im.alt = p.name; im.loading = 'lazy'; g.append(im); });
+    $('#pCount').textContent = S.photos.length ? S.photos.length + '枚' : '';
+    $('#clearP').hidden = !S.photos.length;
+  }
+  function renderRunState() {
+    const needDate = S.videos.some(v => v.date && v.date.ms == null);
+    $('#run').disabled = S.busy || !S.videos.length || !S.photos.length;
+    $('#run').textContent = S.busy ? '調べています…' : S.done ? 'もう一度調べる' : '日付を調べる';
+    if (!S.busy && !S.done) $('#msg').textContent = !S.videos.length || !S.photos.length ? '動画と写真を選ぶと押せます。' : needDate ? '日時が読み取れなかった動画は、入力しておくと確実です。' : '「日付を調べる」を押してください。';
+  }
+  function renderResults() {
+    S.photos.forEach(decide);
+    $('#results').hidden = false;
+    const c = { ok: 0, check: 0, none: 0 }; S.photos.forEach(p => c[statusOf(p)]++);
+    $('#sum').innerHTML = '<span>一致 <b>' + c.ok + '</b></span><span>要確認 <b>' + c.check + '</b></span><span>見つからない <b>' + c.none + '</b></span>';
+    const ul = $('#rList'); ul.innerHTML = '';
+    S.photos.forEach((p, i) => {
+      const st = statusOf(p), li = document.createElement('li');
+      const im = document.createElement('img'); im.src = p.url; im.alt = p.name;
+      const info = document.createElement('div'); info.className = 'info';
+      const fn = document.createElement('div'); fn.className = 'fn'; fn.textContent = p.name;
+      const when = document.createElement('div'); when.className = 'when';
+      const tag = document.createElement('span'); tag.className = 'tag ' + st; tag.textContent = st === 'ok' ? '一致' : st === 'check' ? '要確認' : '見つからない';
+      const src = document.createElement('div'); src.className = 'src';
+      if (st === 'none') { when.textContent = '日付なし'; when.append(tag); src.textContent = S.videos.some(v => v.bad) ? '再生できない動画があります。下から元の動画を選べます' : '下から元の動画を選ぶと日付が入ります'; }
+      else {
+        when.textContent = fmtDT(finalMs(p), p.final.v.date.off); when.append(tag);
+        src.textContent = p.final.v.name + ' の ' + fmtT(p.final.t) + (p.final.rot ? '　向きを動画に合わせます' : '');
+      }
+      const sel = document.createElement('select'); sel.id = 'sel' + p.id; sel.setAttribute('aria-label', p.name + ' の元の動画');
+      const add = (val, label) => { const o = document.createElement('option'); o.value = val; o.textContent = label; sel.append(o); };
+      add('auto', '自動で選ぶ');
+      S.videos.forEach(v => add(String(v.id), v.name));
+      add('none', '日付を付けない');
+      sel.value = p.choice;
+      sel.addEventListener('change', () => { p.choice = sel.value; renderResults(); });
+      info.append(fn, when, src, sel); li.append(im, info); ul.append(li);
+    });
+    $('#save').disabled = !S.photos.some(p => statusOf(p) !== 'none');
+  }
+
+  // ---------- saving ----------
+  async function buildJpeg(p) {
+    const f = p.final, ms = finalMs(p), off = f.v.date.off;
+    const [Y, M, D, h, m, s] = wallParts(ms, off);
+    const seg = exifSegment(Y + ':' + pad(M) + ':' + pad(D) + ' ' + pad(h) + ':' + pad(m) + ':' + pad(s), offStr(off));
+    let bytes = new Uint8Array(await p.file.arrayBuffer());
+    if (!(f.rot === 0 && isJpeg(bytes) && orientationOf(bytes) <= 1)) {
+      const img = await loadImg(p), sw = img.naturalWidth, sh = img.naturalHeight, odd = f.rot % 2 === 1;
+      const c = document.createElement('canvas'); c.width = odd ? sh : sw; c.height = odd ? sw : sh;
+      const x = c.getContext('2d'); x.translate(c.width / 2, c.height / 2); x.rotate(f.rot * Math.PI / 2); x.drawImage(img, -sw / 2, -sh / 2);
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95));
+      bytes = new Uint8Array(await blob.arrayBuffer());
+    }
+    const name = '' + Y + pad(M) + pad(D) + '_' + pad(h) + pad(m) + pad(s) + '_' + p.name.replace(/\.[^.]+$/, '') + '.jpg';
+    return { blob: new Blob(injectExif(bytes, seg), { type: 'image/jpeg' }), name, ms };
+  }
+  async function saveFile(name, blob) {
+    const dl = await Promise.race([dlPromise, new Promise(r => setTimeout(() => r(undefined), 300))]);
+    if (dl) {
+      try { await dl.save({ filename: name, data: blob }); toast('保存しました'); return true; }
+      catch (e) {
+        if (e && e.code === 'declined') return false;
+        if (e && e.code === 'rate_limited') { toast('前の保存画面が開いています。閉じてからもう一度どうぞ'); return false; }
+        if (e && e.code !== 'unavailable' && e.code !== 'not_granted') { toast('保存できませんでした：' + (e.message || e.code)); return false; }
+      }
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    return true;
+  }
+  async function save() {
+    const list = S.photos.filter(p => statusOf(p) !== 'none');
+    if (!list.length) return;
+    if (!window.JSZip) { toast('ZIPの準備ができていません。少し待ってからもう一度押してください'); return; }
+    const btn = $('#save'); btn.disabled = true;
+    try {
+      const zip = new JSZip(), used = new Set();
+      for (let i = 0; i < list.length; i++) {
+        btn.textContent = '作成中 ' + (i + 1) + '/' + list.length;
+        const r = await buildJpeg(list[i]); let n = r.name, k = 2;
+        while (used.has(n)) n = r.name.replace(/\.jpg$/, '-' + (k++) + '.jpg'); used.add(n);
+        zip.file(n, r.blob, { date: new Date(r.ms) });
+      }
+      btn.textContent = 'ZIPにまとめ中…';
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      const d = new Date();
+      await saveFile('日付つき写真_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + list.length + '枚.zip', blob);
+    } catch (e) { toast('作成できませんでした：' + (e && e.message || e)); }
+    finally { btn.textContent = '日付を付けて保存（ZIP）'; btn.disabled = false; }
+  }
+
+  // ---------- adding files ----------
+  function addVideos(files) {
+    const fs = [...files].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(f.name));
+    fs.sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
+    for (const f of fs) { const v = { id: ++uid, file: f, name: f.name, url: URL.createObjectURL(f), date: null, bad: false, frames: [] }; S.videos.push(v); detectDate(v); }
+    if (fs.length) { S.done = false; $('#results').hidden = true; renderVideos(); renderRunState(); }
+  }
+  function addPhotos(files) {
+    const fs = [...files].filter(f => f.type.startsWith('image/') || /\.(jpe?g|png|heic|webp)$/i.test(f.name));
+    fs.sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
+    for (const f of fs) S.photos.push({ id: ++uid, file: f, name: f.name, url: URL.createObjectURL(f), choice: 'auto', match: null, final: null });
+    if (fs.length) { S.done = false; $('#results').hidden = true; renderPhotos(); renderRunState(); }
+  }
+  $('#pickV').addEventListener('click', () => $('#fileV').click());
+  $('#pickP').addEventListener('click', () => $('#fileP').click());
+  $('#fileV').addEventListener('change', e => { addVideos(e.target.files); e.target.value = ''; });
+  $('#fileP').addEventListener('change', e => { addPhotos(e.target.files); e.target.value = ''; });
+  $('#clearV').addEventListener('click', () => { S.videos.forEach(v => URL.revokeObjectURL(v.url)); S.videos = []; S.photos.forEach(p => p.choice = 'auto'); S.done = false; $('#results').hidden = true; renderVideos(); renderRunState(); });
+  $('#clearP').addEventListener('click', () => { S.photos.forEach(p => URL.revokeObjectURL(p.url)); S.photos = []; S.done = false; $('#results').hidden = true; renderPhotos(); renderRunState(); });
+  $('#run').addEventListener('click', run);
+  $('#save').addEventListener('click', save);
+  let depth = 0;
+  window.addEventListener('dragenter', e => { e.preventDefault(); depth++; document.body.classList.add('dragging'); });
+  window.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; document.body.classList.remove('dragging'); } });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => { e.preventDefault(); depth = 0; document.body.classList.remove('dragging'); const fl = [...(e.dataTransfer?.files || [])]; addVideos(fl); addPhotos(fl); });
+
+  renderVideos(); renderPhotos(); renderRunState();
+})();
+</script>
+
+</body></html>
