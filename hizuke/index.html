@@ -79,6 +79,17 @@ ul.rl { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .toast.on { opacity: 1; }
 body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
 @media (max-width: 480px) { .vl input[type="datetime-local"], .rl select { font-size: 16px; } }
+
+.source-picker { width: min(680px, calc(100% - 32px)); max-height: 90dvh; box-sizing: border-box; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); padding: 16px; }
+.source-picker::backdrop { background: #0009; }
+.source-picker .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.source-picker .comparison img { width: 100%; height: 200px; object-fit: contain; background: var(--bg); }
+.source-picker .candidates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.source-picker .candidate { display: grid; gap: 6px; padding: 8px; text-align: left; min-width: 0; }
+.source-picker .candidate img { width: 100%; height: 140px; object-fit: contain; background: var(--bg); }
+.source-picker .candidate[aria-pressed="true"] { outline: 3px solid var(--accent); }
+.source-picker .candidate span { font-size: 12px; overflow-wrap: anywhere; }
+.source-picker .toolbar { position: sticky; top: -16px; padding: 8px 0; background: var(--surface); z-index: 1; }
 </style>
 
 <div class="wrap">
@@ -129,6 +140,14 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
 </div>
 <input type="file" id="fileV" accept="video/*,.mov,.mp4,.m4v" multiple hidden>
 <input type="file" id="fileP" accept="image/*" multiple hidden>
+<dialog id="sourcePicker" class="source-picker" aria-labelledby="pickerTitle">
+  <div class="row toolbar"><strong id="pickerTitle" class="grow">元の写真を選ぶ</strong><button id="closePicker" class="btn small" type="button">閉じる</button></div>
+  <p class="note">似ている順に表示しています。候補をタップすると大きく表示します。</p>
+  <div class="comparison"><div><p class="note">加工後の写真</p><img id="editedPreview" alt="加工後の写真"></div><div><p class="note">選択する元写真</p><img id="originalPreview" alt="候補の元写真"></div></div>
+  <p id="candidateDate" class="mono"></p>
+  <button id="confirmSource" class="btn primary" type="button" disabled>この元写真を使う</button>
+  <div id="candidateGrid" class="candidates" style="margin-top:16px"></div>
+</dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -417,7 +436,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
   }
   const finalMs = p => p.final && p.final.v.date.ms != null ? p.final.v.date.ms + p.final.t * 1000 : null;
   const ambiguous = p => S.mode === 'photo' && p.final && S.videos.some(v => v !== p.final.v && v.frames?.length && bestIn(p, [v]).score >= p.final.score - 0.04);
-  const statusOf = p => { if (!p.final || finalMs(p) == null) return 'none'; if (p.final.manual) return 'check'; return p.final.score >= OK && !ambiguous(p) ? 'ok' : 'check'; };
+  const statusOf = p => { if (!p.final || finalMs(p) == null) return 'none'; if (p.final.manual) return S.mode === 'photo' ? 'ok' : 'check'; return p.final.score >= OK && !ambiguous(p) ? 'ok' : 'check'; };
 
   // ---------- rendering ----------
   function renderVideos() {
@@ -486,10 +505,41 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
       add('none', '日付を付けない');
       sel.value = p.choice;
       sel.addEventListener('change', () => { p.choice = sel.value; renderResults(); });
-      info.append(fn, when, src, sel); li.append(im, info); ul.append(li);
+      info.append(fn, when, src);
+      if (S.mode === 'photo') {
+        const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'btn'; choose.textContent = '写真を見て元写真を選ぶ';
+        choose.addEventListener('click', () => openSourcePicker(p)); info.append(choose);
+        const skip = document.createElement('button'); skip.type = 'button'; skip.className = 'link'; skip.textContent = '日付を付けない'; skip.addEventListener('click', () => { p.choice = 'none'; renderResults(); }); info.append(skip);
+      } else info.append(sel);
+      li.append(im, info); ul.append(li);
     });
     $('#save').disabled = !S.photos.some(p => statusOf(p) !== 'none');
   }
+
+  function openSourcePicker(p) {
+    const dialog = $('#sourcePicker'), grid = $('#candidateGrid'), confirm = $('#confirmSource');
+    grid.replaceChildren(); $('#editedPreview').src = p.url;
+    const candidates = S.videos.map(v => ({ v, score: v.frames?.length && p.fp ? bestIn(p, [v]).score : -2 })).sort((a, b) => b.score - a.score);
+    let selected = null;
+    function select(v) {
+      selected = v; $('#originalPreview').src = v.url;
+      $('#candidateDate').textContent = v.date?.ms != null ? fmtDT(v.date.ms, v.date.off) : '撮影日時なし：元データの欄で入力してください';
+      confirm.disabled = v.date?.ms == null;
+      [...grid.children].forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.id === String(v.id))));
+    }
+    for (const { v } of candidates) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'btn candidate'; button.dataset.id = String(v.id);
+      const img = document.createElement('img'); img.src = v.url; img.alt = v.name; img.loading = 'lazy';
+      const date = document.createElement('span'); date.textContent = v.date?.ms != null ? fmtDT(v.date.ms, v.date.off) : '撮影日時なし';
+      const name = document.createElement('span'); name.textContent = v.name;
+      button.append(img, date, name); button.addEventListener('click', () => select(v)); grid.append(button);
+    }
+    const initial = p.final?.v || candidates[0]?.v;
+    if (initial) select(initial);
+    confirm.onclick = () => { if (!selected || selected.date?.ms == null) return; p.choice = String(selected.id); dialog.close(); renderResults(); };
+    dialog.showModal(); dialog.scrollTop = 0;
+  }
+  $('#closePicker').addEventListener('click', () => $('#sourcePicker').close());
 
   // ---------- saving ----------
   async function buildJpeg(p) {
