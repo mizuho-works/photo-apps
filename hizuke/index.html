@@ -87,8 +87,9 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
     <p class="lead">切り出した写真が、どの動画のどの場面かを自動で探して、その動画の撮影日時を写真に入れます。</p>
   </header>
 
+  <section class="panel"><label for="mode">照合する元データ</label><select id="mode" class="btn"><option value="video">動画 → 切り出した写真</option><option value="photo">元の写真 → 文字入れ・加工した写真</option></select><p class="note">写真モードは撮影日時（EXIF）を引き継ぎます。画像内の文字はそのまま残ります。</p></section>
   <section class="panel">
-    <h2><span>1. 元の動画</span><span id="vCount" class="mono"></span></h2>
+    <h2><span id="sourceTitle">1. 元の動画</span><span id="vCount" class="mono"></span></h2>
     <div class="row">
       <button class="btn grow" id="pickV">＋ 動画を選ぶ</button>
       <button class="link" id="clearV" hidden>全部はずす</button>
@@ -98,7 +99,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
   </section>
 
   <section class="panel">
-    <h2><span>2. 切り出した写真</span><span id="pCount" class="mono"></span></h2>
+    <h2><span id="targetTitle">2. 切り出した写真</span><span id="pCount" class="mono"></span></h2>
     <div class="row">
       <button class="btn grow" id="pickP">＋ 写真を選ぶ</button>
       <button class="link" id="clearP" hidden>全部はずす</button>
@@ -109,7 +110,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
   <section class="panel">
     <button class="btn primary" id="run" disabled>日付を調べる</button>
     <div class="prog" id="progBox" hidden><div id="prog"></div></div>
-    <div class="msg" id="msg">動画と写真を選ぶと押せます。</div>
+    <div class="msg" id="msg">元データと日付を直す写真を選ぶと押せます。</div>
   </section>
 
   <section class="panel" id="results" hidden>
@@ -136,7 +137,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
   const pad = (n, w = 2) => String(n).padStart(w, '0');
   const once = (el, ev, ms) => new Promise(res => { const h = () => { clearTimeout(tm); el.removeEventListener(ev, h); res(true); }; const tm = setTimeout(() => { el.removeEventListener(ev, h); res(false); }, ms); el.addEventListener(ev, h); });
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const S = { videos: [], photos: [], busy: false, done: false };
+  const S = { mode: 'video', videos: [], photos: [], busy: false, done: false };
   let uid = 0, toastTm;
   const dlPromise = (async () => { try { return window.claude?.use ? await window.claude.use('downloads') : null; } catch { return null; } })();
 
@@ -180,11 +181,54 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
   }
   async function detectDate(v) {
     let d = null;
-    try { d = await readMovieDate(v.file); } catch {}
+    try { d = S.mode === 'photo' ? await readPhotoDate(v.file) : await readMovieDate(v.file); } catch {}
     const lm = v.file.lastModified;
-    if (!d && lm && Date.now() - lm > 600000) d = { ms: lm, off: localOff(lm), src: 'ファイルの日時' };
+    if (S.mode !== 'photo' && !d && lm && Date.now() - lm > 600000) d = { ms: lm, off: localOff(lm), src: 'ファイルの日時' };
     v.date = d || { ms: null, off: localOff(Date.now()), src: '不明' };
     renderVideos(); renderRunState();
+  }
+
+  // Read DateTimeOriginal first; never substitute the edited file's modification date.
+  async function readPhotoDate(file) {
+    const b = new Uint8Array(await file.arrayBuffer());
+    let base = -1, end = b.length;
+    if (b[0] === 0xff && b[1] === 0xd8) {
+      for (let i = 2; i + 4 <= b.length;) {
+        if (b[i] !== 0xff || b[i + 1] === 0xda) break;
+        const len = (b[i + 2] << 8) | b[i + 3];
+        if (len < 2 || i + 2 + len > b.length) break;
+        if (b[i + 1] === 0xe1 && String.fromCharCode(...b.slice(i + 4, i + 10)) === 'Exif\0\0') { base = i + 10; end = i + 2 + len; break; }
+        i += 2 + len;
+      }
+    }
+    if (base < 0) return null;
+    const dv = new DataView(b.buffer, base, end - base), le = dv.getUint16(0) === 0x4949;
+    if ((!le && dv.getUint16(0) !== 0x4d4d) || dv.getUint16(2, le) !== 42) return null;
+    const tags = new Map();
+    function readIFD(off, depth = 0) {
+      if (depth > 1 || off < 8 || off + 2 > dv.byteLength) return;
+      const n = dv.getUint16(off, le);
+      for (let j = 0; j < n; j++) {
+        const e = off + 2 + j * 12; if (e + 12 > dv.byteLength) break;
+        const tag = dv.getUint16(e, le), type = dv.getUint16(e + 2, le), count = dv.getUint32(e + 4, le);
+        if (tag === 0x8769 && type === 4) readIFD(dv.getUint32(e + 8, le), depth + 1);
+        if (type !== 2 || count > 128) continue;
+        const at = count <= 4 ? e + 8 : dv.getUint32(e + 8, le);
+        if (at + count > dv.byteLength) continue;
+        tags.set(tag, new TextDecoder().decode(b.subarray(base + at, base + at + count)).replace(/\0.*$/, ''));
+      }
+    }
+    readIFD(dv.getUint32(4, le));
+    const original = tags.has(0x9003), value = tags.get(0x9003) || tags.get(0x0132);
+    const m = value?.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+    if (!m) return null;
+    const parts = m.slice(1).map(Number), [y, mo, d, h, mi, sec] = parts;
+    const wall = Date.UTC(y, mo - 1, d, h, mi, sec);
+    if (wallParts(wall, 0).some((x, i) => x !== parts[i])) return null;
+    const tz = tags.get(original ? 0x9011 : 0x9010)?.match(/^([+-])(\d{2}):(\d{2})$/);
+    const local = new Date(y, mo - 1, d, h, mi, sec).getTime();
+    const off = tz ? (tz[1] === '-' ? -1 : 1) * (+tz[2] * 60 + +tz[3]) : localOff(local);
+    return { ms: wall - off * 60000, off, src: '写真の撮影日時' + (tz ? '' : '（端末のタイムゾーン）') };
   }
 
   // ---------- JPEG + EXIF ----------
@@ -309,7 +353,14 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
         const img = await loadImg(p); p.fp = [0, 1, 2, 3].map(r => fingerprint(img, r)); p.choice = 'auto'; p.match = null;
       }
       for (let i = 0; i < vids.length; i++) {
-        const v = vids[i], h = await openVideo(v);
+        const v = vids[i];
+        if (S.mode === 'photo') {
+          v.frames = []; v.bad = false;
+          try { const img = await loadImg(v); v.frames = [{ t: 0, vec: fingerprint(img, 0) }]; } catch { v.bad = true; }
+          setProg(0.1 + 0.7 * (i + 1) / vids.length, '元の写真を照合中 ' + (i + 1) + '/' + vids.length);
+          await sleep(0); continue;
+        }
+        const h = await openVideo(v);
         v.frames = []; v.bad = !h;
         if (h) {
           const n = Math.max(1, Math.ceil((h.el.duration - 0.1) / STEP));
@@ -325,7 +376,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
       for (const p of S.photos) { const b = good.length ? bestIn(p, good) : null; p.match = b && b.score > -2 ? b : null; }
       // refine each match around its coarse time, frame by frame
       const groups = new Map();
-      S.photos.forEach(p => { if (p.match && p.match.score > 0.5) { if (!groups.has(p.match.v)) groups.set(p.match.v, []); groups.get(p.match.v).push(p); } });
+      S.photos.forEach(p => { if (S.mode === 'video' && p.match && p.match.score > 0.5) { if (!groups.has(p.match.v)) groups.set(p.match.v, []); groups.get(p.match.v).push(p); } });
       let gi = 0;
       for (const [v, ps] of groups) {
         const h = await openVideo(v); gi++;
@@ -347,7 +398,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
       $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
       $('#msg').textContent = 'うまく調べられませんでした：' + (e && e.message || e);
-    } finally { S.busy = false; renderRunState(); }
+    } finally { S.busy = false; $('#progBox').hidden = true; renderRunState(); }
   }
 
   // ---------- final decision per photo ----------
@@ -365,7 +416,8 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
     }
   }
   const finalMs = p => p.final && p.final.v.date.ms != null ? p.final.v.date.ms + p.final.t * 1000 : null;
-  const statusOf = p => { if (!p.final || finalMs(p) == null) return 'none'; if (p.final.manual) return 'check'; return p.final.score >= OK ? 'ok' : 'check'; };
+  const ambiguous = p => S.mode === 'photo' && p.final && S.videos.some(v => v !== p.final.v && v.frames?.length && bestIn(p, [v]).score >= p.final.score - 0.04);
+  const statusOf = p => { if (!p.final || finalMs(p) == null) return 'none'; if (p.final.manual) return 'check'; return p.final.score >= OK && !ambiguous(p) ? 'ok' : 'check'; };
 
   // ---------- rendering ----------
   function renderVideos() {
@@ -391,7 +443,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
       x.addEventListener('click', () => { URL.revokeObjectURL(v.url); S.videos = S.videos.filter(y => y !== v); S.photos.forEach(p => { if (p.choice === String(v.id)) p.choice = 'auto'; }); S.done = false; $('#results').hidden = true; renderVideos(); renderRunState(); });
       li.append(nm, x, dt); ul.append(li);
     });
-    $('#vCount').textContent = S.videos.length ? S.videos.length + '本' : '';
+    $('#vCount').textContent = S.videos.length ? S.videos.length + (S.mode === 'photo' ? '枚' : '本') : '';
     $('#clearV').hidden = !S.videos.length;
   }
   function renderPhotos() {
@@ -402,9 +454,10 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
   }
   function renderRunState() {
     const needDate = S.videos.some(v => v.date && v.date.ms == null);
-    $('#run').disabled = S.busy || !S.videos.length || !S.photos.length;
+    document.querySelectorAll('#mode, #pickV, #pickP, #clearV, #clearP, #vList input, #vList button').forEach(el => el.disabled = S.busy);
+    $('#run').disabled = S.busy || !S.videos.length || !S.photos.length || S.videos.some(v => !v.date);
     $('#run').textContent = S.busy ? '調べています…' : S.done ? 'もう一度調べる' : '日付を調べる';
-    if (!S.busy && !S.done) $('#msg').textContent = !S.videos.length || !S.photos.length ? '動画と写真を選ぶと押せます。' : needDate ? '日時が読み取れなかった動画は、入力しておくと確実です。' : '「日付を調べる」を押してください。';
+    if (!S.busy && !S.done) $('#msg').textContent = !S.videos.length || !S.photos.length ? '元データと日付を直す写真を選ぶと押せます。' : needDate ? '日時が読み取れなかった元データは、入力しておくと確実です。' : '「日付を調べる」を押してください。';
   }
   function renderResults() {
     S.photos.forEach(decide);
@@ -420,12 +473,13 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
       const when = document.createElement('div'); when.className = 'when';
       const tag = document.createElement('span'); tag.className = 'tag ' + st; tag.textContent = st === 'ok' ? '一致' : st === 'check' ? '要確認' : '見つからない';
       const src = document.createElement('div'); src.className = 'src';
-      if (st === 'none') { when.textContent = '日付なし'; when.append(tag); src.textContent = S.videos.some(v => v.bad) ? '再生できない動画があります。下から元の動画を選べます' : '下から元の動画を選ぶと日付が入ります'; }
+      if (st === 'none') { when.textContent = '日付なし'; when.append(tag); src.textContent = S.videos.some(v => v.bad) ? '再生できない動画があります。下から元データを選べます' : '下から元データを選ぶと日付が入ります'; }
       else {
         when.textContent = fmtDT(finalMs(p), p.final.v.date.off); when.append(tag);
-        src.textContent = p.final.v.name + ' の ' + fmtT(p.final.t) + (p.final.rot ? '　向きを動画に合わせます' : '');
+        src.textContent = p.final.v.name + (S.mode === 'photo' ? '（元写真）' : ' の ' + fmtT(p.final.t)) + (ambiguous(p) ? '・似た候補があります' : '');
+        if (S.mode === 'photo') { const original = document.createElement('img'); original.src = p.final.v.url; original.alt = '照合候補：' + p.final.v.name; info.append(original); }
       }
-      const sel = document.createElement('select'); sel.id = 'sel' + p.id; sel.setAttribute('aria-label', p.name + ' の元の動画');
+      const sel = document.createElement('select'); sel.id = 'sel' + p.id; sel.setAttribute('aria-label', p.name + ' の元データ');
       const add = (val, label) => { const o = document.createElement('option'); o.value = val; o.textContent = label; sel.append(o); };
       add('auto', '自動で選ぶ');
       S.videos.forEach(v => add(String(v.id), v.name));
@@ -439,7 +493,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
 
   // ---------- saving ----------
   async function buildJpeg(p) {
-    const f = p.final, ms = finalMs(p), off = f.v.date.off;
+    const f = { ...p.final, rot: S.mode === 'photo' ? 0 : p.final.rot }, ms = finalMs(p), off = f.v.date.off;
     const [Y, M, D, h, m, s] = wallParts(ms, off);
     const seg = exifSegment(Y + ':' + pad(M) + ':' + pad(D) + ' ' + pad(h) + ':' + pad(m) + ':' + pad(s), offStr(off));
     let bytes = new Uint8Array(await p.file.arrayBuffer());
@@ -490,7 +544,7 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
 
   // ---------- adding files ----------
   function addVideos(files) {
-    const fs = [...files].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(f.name));
+    const fs = [...files].filter(f => S.mode === 'photo' ? f.type.startsWith('image/') || /\.(jpe?g|png|heic|webp)$/i.test(f.name) : f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(f.name));
     fs.sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
     for (const f of fs) { const v = { id: ++uid, file: f, name: f.name, url: URL.createObjectURL(f), date: null, bad: false, frames: [] }; S.videos.push(v); detectDate(v); }
     if (fs.length) { S.done = false; $('#results').hidden = true; renderVideos(); renderRunState(); }
@@ -513,8 +567,20 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
   window.addEventListener('dragenter', e => { e.preventDefault(); depth++; document.body.classList.add('dragging'); });
   window.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; document.body.classList.remove('dragging'); } });
   window.addEventListener('dragover', e => e.preventDefault());
-  window.addEventListener('drop', e => { e.preventDefault(); depth = 0; document.body.classList.remove('dragging'); const fl = [...(e.dataTransfer?.files || [])]; addVideos(fl); addPhotos(fl); });
+  window.addEventListener('drop', e => { e.preventDefault(); depth = 0; document.body.classList.remove('dragging'); const fl = [...(e.dataTransfer?.files || [])]; if (S.busy) return; if (S.mode === 'photo') toast('上の選択ボタンで、元写真と加工後の写真を分けて選んでください'); else { addVideos(fl); addPhotos(fl); } });
 
+  $('#mode').addEventListener('change', () => {
+    $('#clearV').click(); $('#clearP').click(); S.mode = $('#mode').value;
+    const photo = S.mode === 'photo';
+    $('#sourceTitle').textContent = photo ? '1. 元の写真' : '1. 元の動画';
+    $('#targetTitle').textContent = photo ? '2. 文字入れ・加工した写真' : '2. 切り出した写真';
+    $('#pickV').textContent = photo ? '＋ 元の写真を選ぶ' : '＋ 動画を選ぶ';
+    $('#fileV').accept = photo ? 'image/*' : 'video/*,.mov,.mp4,.m4v';
+    $('#vNote').textContent = photo ? '加工前の写真をまとめて選んでください。JPEGの撮影日時を読み取ります。日時がない写真や、HEICなど読み取れない形式は手入力してください。写真は外部に送信されません。' : '写真を切り出した動画を、まとめて選んでください。動画は外部に送信されません。';
+    document.querySelector('.lead').textContent = photo ? '加工後の写真を元写真と照合して、元の撮影日時を入れます。文字入れや背景の加工はそのまま残ります。' : '切り出した写真を元の動画と照合して、撮影日時を入れます。';
+    document.querySelector('.how li:last-child').textContent = '写真アプリに、元データの撮影日時で並びます。';
+    renderRunState();
+  });
   renderVideos(); renderPhotos(); renderRunState();
 })();
 </script>
