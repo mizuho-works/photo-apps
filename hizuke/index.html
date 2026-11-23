@@ -3,6 +3,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="日付そろえ">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../app-nav.css">
 </head><body>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -93,6 +94,18 @@ body.dragging .panel { outline: 2px dashed var(--accent); outline-offset: 2px; }
 </style>
 
 <div class="wrap">
+  <nav class="photo-app-nav" aria-label="写真アプリ">
+    <details>
+      <summary>アプリを切り替え</summary>
+      <ul>
+        <li><a href="../best-shot-picker/">ベストショット整理</a></li>
+        <li><a href="../koma/">コマ選び</a></li>
+        <li><a href="../bounce/">バウンスメーカー</a></li>
+        <li><a href="../motto/">写真コラージュ</a></li>
+        <li><a href="../">写真アプリ一覧</a></li>
+      </ul>
+    </details>
+  </nav>
   <header>
     <h1>日付そろえ</h1>
     <p class="lead">切り出した写真が、どの動画のどの場面かを自動で探して、その動画の撮影日時を写真に入れます。</p>

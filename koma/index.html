@@ -3,6 +3,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="コマ選び">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../app-nav.css">
 </head><body>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -174,6 +175,18 @@ button { touch-action: manipulation; }
 </style>
 
 <div class="wrap">
+  <nav class="photo-app-nav" aria-label="写真アプリ">
+    <details>
+      <summary>アプリを切り替え</summary>
+      <ul>
+        <li><a href="../best-shot-picker/">ベストショット整理</a></li>
+        <li><a href="../hizuke/">日付そろえ</a></li>
+        <li><a href="../bounce/">バウンスメーカー</a></li>
+        <li><a href="../motto/">写真コラージュ</a></li>
+        <li><a href="../">写真アプリ一覧</a></li>
+      </ul>
+    </details>
+  </nav>
   <header>
     <h1>コマ選び <small>動画からアルバム用の一枚を切り出す</small></h1>
     <span class="spacer"></span>
